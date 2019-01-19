@@ -70,15 +70,15 @@ Path_to_openpyfiles = 'C:\Tcl'
 
 
 # For periods 0 to 'End_T_Reg_1' in an interval of 'Int_T_Reg_1'
-Int_T_Reg_1       = 1
+Int_T_Reg_1       = 0.1
 End_T_Reg_1       = 1
 
 # For periods ['End_T_Reg_1'+'Int_T_Reg_2'] to 'End_T_Reg_2' in an interval of 'Int_T_Reg_2'
-Int_T_Reg_2       = 1
+Int_T_Reg_2       = 0.2
 End_T_Reg_2       = 2
 
 # For periods ['End_T_Reg_2'+'Int_T_Reg_3'] to 'End_T_Reg_3' in an interval of 'Int_T_Reg_3'
-Int_T_Reg_3       = 3
+Int_T_Reg_3       = 0.5
 End_T_Reg_3       = 5
 
 # Plot Spectra  (options: 'Yes' or 'No')
@@ -252,8 +252,6 @@ for iEQ in range(1,No_of_GMs+1):
             time.append(tCurrent)
             u1.append(nodeDisp(2,1))
             u2.append(nodeDisp(2,2))  
-            #print('tCurrent = {} secs'.format(tCurrent))
-            #sys.stdout.write('.'); sys.stdout.flush();
             
         # Storing responses
         DISPLACEMENTS.loc[ii-1,'uX'] = np.array(u1)
