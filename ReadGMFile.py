@@ -12,13 +12,8 @@ def ReadGMFile():
         for k in range(0,hdlines):
             del data [0]
         
-        thefile = open(outFile, 'w')
-        for item in data:
-            thefile.write("%s\n" % item)
-        thefile.close()
-        
+       
         data = list(filter(str.strip, data)) 
-        #gm = np.reshape(np.asarray([float(j) for j in data]), (-1,1))
         gm = np.array(list(map(float, data)))
         gmXY[i+1] = gm
         

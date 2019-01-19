@@ -70,15 +70,15 @@ Path_to_openpyfiles = 'C:\Tcl'
 
 
 # For periods 0 to 'End_T_Reg_1' in an interval of 'Int_T_Reg_1'
-Int_T_Reg_1       = 0.02
+Int_T_Reg_1       = 1
 End_T_Reg_1       = 1
 
 # For periods ['End_T_Reg_1'+'Int_T_Reg_2'] to 'End_T_Reg_2' in an interval of 'Int_T_Reg_2'
-Int_T_Reg_2       = 0.1
+Int_T_Reg_2       = 1
 End_T_Reg_2       = 2
 
 # For periods ['End_T_Reg_2'+'Int_T_Reg_3'] to 'End_T_Reg_3' in an interval of 'Int_T_Reg_3'
-Int_T_Reg_3       = 0.25
+Int_T_Reg_3       = 3
 End_T_Reg_3       = 5
 
 # Plot Spectra  (options: 'Yes' or 'No')
@@ -101,9 +101,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 wipe()
 
-#
+# Getting Number of Ground Motions from the GM folder
 GMdir = os.getcwd()
 No_of_GMs = int(len(fnmatch.filter(os.listdir(GMdir+'\\GM'),'*.AT2'))/2)
+print('\nGenerating Spectra for {} provided GMs \n\n'.format(np.round(No_of_GMs,0)))
 
 # Initializations
 DISPLACEMENTS = pd.DataFrame(columns=['uX','uY'])
@@ -111,19 +112,24 @@ GM_SPECTRA = pd.DataFrame(columns=['Period(s)','RotD50Sa(g)', 'RotD100Sa(g)'])
 SDOF_RESPONSE = [[]]
 GM_RESPONSE = [[]]
 
-# Spectra
+# Spectra Generation
 for iEQ in range(1,No_of_GMs+1):
+    print('Generating Spectra for GM: {} ...\n'.format(np.round(iEQ,0)))
     
     Periods = np.concatenate((list(np.arange(Int_T_Reg_1,End_T_Reg_1+Int_T_Reg_1,Int_T_Reg_1)),list(np.arange(End_T_Reg_1+Int_T_Reg_2,End_T_Reg_2+Int_T_Reg_2,Int_T_Reg_2)),list(np.arange(End_T_Reg_2+Int_T_Reg_3,End_T_Reg_3+Int_T_Reg_3,Int_T_Reg_3))),axis=0)
     ii = 0
     
     for T in Periods:
         ii = ii+1
-        GM_SPECTRA.loc[ii-1,'Period(s)'] = T
         GMinter = 0
-        # set modelbuilder
+               
+        # Storing Periods
+        GM_SPECTRA.loc[ii-1,'Period(s)'] = T
+                
+        # Setting modelbuilder
         model('basic', '-ndm', 3, '-ndf', 6)
-        # variables
+        
+        # Setting Variables
         g = 386.1
         L = 1.0
         d = 2
@@ -138,51 +144,49 @@ for iEQ in range(1,No_of_GMs+1):
         M = K*(T**2)/4/(np.pi**2)
         omega = np.sqrt(K/M)
         Tn = 2*np.pi/omega
-        
-        # create nodes
+                
+        # Creating nodes
         node(1, 0.0, 0.0, 0.0)
         node(2, 0.0, 0.0, L)
         
-        # transformation
+        # Transformation
         transfTag = 1
         geomTransf('Linear',transfTag,0.0,1.0,0.0)
         
-        # set boundary condition
+        # Setting boundary condition
         fix(1, 1, 1, 1, 1, 1, 1)
         
-        # define materials
+        # Defining materials
         uniaxialMaterial("Elastic", 11, E)
         
-        # define elements
+        # Defining elements
         element("elasticBeamColumn",12,1,2,A,E,G,J,I2,I3,1)
         
-        # define mass
+        # Defining mass
         mass(2,M,M,0.0,0.0,0.0,0.0)
         
-        # EIGEN VALUE ANALYSIS
+        # Eigen Value Analysis (Verifying Period)
         numEigen = 1
         eigenValues = eigen(numEigen)
         omega = np.sqrt(eigenValues)
         T = 2*np.pi/omega
-        print('Fundamental Period = {}'.format(np.round(T,3)))
+        print('   Calculating Spectral Ordinate for Period = {} secs'.format(np.round(T,3)))
         
-        ## Generate G3 Files ###
-        exec(open("ReadGMFile.py").read())	            # read in procedure Multinition
-        
+    
+        ## Reading GM Files 
+        exec(open("ReadGMFile.py").read())	            # read in procedure Multinition 
         iGMinput = 'GM1'+str(iEQ)+' GM2'+str(iEQ) ;
         GMinput  = iGMinput.split(' ');
-        gmXY     = {}
-        
+        gmXY     = {}        
         for i in range(0,2):
             inFile   = GMdir + '\\GM\\'+ GMinput[i]+'.AT2';
-            outFile  = GMdir + '\\GM\\'+ GMinput[i]+'.g3';
             dt, NumPts , gmXY = ReadGMFile()
         
+        # Storing GM Histories
         gmX = gmXY[1]
         gmY = gmXY[2]       
         gmXY_mat = np.column_stack((gmX,gmX,gmY,gmY))
         
-
         # Bidirectional Uniform Earthquake ground motion (uniform acceleration input at all support nodes)
         iGMfile      = 'GM1'+str(iEQ)+' GM2'+str(iEQ) ;			
         GMfile       = iGMfile.split(' ')
@@ -192,24 +196,22 @@ for iEQ in range(1,No_of_GMs+1):
         loop         = [1,2,3,4]
         
         for i in loop:
-            # Set time series to be passed to uniform excitation
+            # Setting time series to be passed to uniform excitation
             timeSeries('Path',IDTag +i, '-dt', dt, '-values', *list(gmXY_mat[:,i-1]), '-factor', GMfact[i-1]*g)
-            # Create UniformExcitation load pattern
+            # Creating UniformExcitation load pattern
             pattern('UniformExcitation',  IDTag+i,   GMdirection[i-1],  '-accel', IDTag+i)
         
-        # define DAMPING
-        # apply Rayleigh DAMPING from $xDamp
+        # Defining Damping
+        # Applying Rayleigh Damping from $xDamp
         # D=$alphaM*M + $betaKcurr*Kcurrent + $betaKcomm*KlastCommit + $beatKinit*$Kinitial
         xDamp 		= 0.05;								# 5% damping ratio
         alphaM 		= 0.;								# M-prop. damping; D = alphaM*M
         betaKcurr 	= 0.;         						# K-proportional damping;      +beatKcurr*KCurrent
         betaKcomm 	= 2.*xDamp/omega;   				# K-prop. damping parameter;   +betaKcomm*KlastCommitt
         betaKinit 	= 0.;         						# initial-stiffness proportional damping      +beatKinit*Kini
-        
-        # define damping
         rayleigh(alphaM,betaKcurr,betaKinit,betaKcomm); # RAYLEIGH damping
-        
-        #create the analysis
+                
+        # Creating the analysis
         wipeAnalysis()			            # clear previously-define analysis parameters
         constraints("Penalty",1e18, 1e18)   # how it handles boundary conditions
         numberer("RCM")                     # renumber dof's to minimize band-width (optimization), if you want to
@@ -220,25 +222,26 @@ for iEQ in range(1,No_of_GMs+1):
         test('EnergyIncr',1.0e-6, 100, 0)
         analysis("Transient")
         
-        # set some variables
-        dtAnalysis    = dt;
+        # Variables
+        dtAnalysis    = dt
         TmaxAnanlysis = dt*NumPts
         tFinal        = int(TmaxAnanlysis/dtAnalysis)
         tCurrent      = getTime()
         ok            = 0
         time          = [tCurrent]
-        u1 = [0.0]
-        u2 = [0.0]
+        u1            = [0.0]
+        u2            = [0.0]
         
-        # Perform the transient analysis
+         
+        # Performing the transient analysis
         while ok == 0 and tCurrent < tFinal:
-            ok = analyze(1, dt)
+            ok = analyze(1, dtAnalysis)
             # if the analysis fails try initial tangent iteration
             if ok != 0:
                 print("Iteration failed .. lets try an initial stiffness for this step")
                 test('NormDispIncr', 1.0e-12,  100, 0)
                 algorithm('ModifiedNewton', '-initial')
-                ok =analyze( 1, .01)
+                ok =analyze( 1, .001)
                 
                 if ok == 0:
                     print("that worked .. back to regular newton")
@@ -248,13 +251,16 @@ for iEQ in range(1,No_of_GMs+1):
             tCurrent = getTime()
             time.append(tCurrent)
             u1.append(nodeDisp(2,1))
-            u2.append(nodeDisp(2,2))
+            u2.append(nodeDisp(2,2))  
+            #print('tCurrent = {} secs'.format(tCurrent))
+            #sys.stdout.write('.'); sys.stdout.flush();
             
+        # Storing responses
         DISPLACEMENTS.loc[ii-1,'uX'] = np.array(u1)
         DISPLACEMENTS.loc[ii-1,'uY'] = np.array(u2)
         DISP_X_Y = np.column_stack((np.array(u1),np.array(u2)))
         
-        ##### Rotating the Spectra
+        # Rotating the Spectra
         Rot_Matrix = np.zeros((2,2))
         Rot_Disp = np.zeros((180,1))
         for theta in range (0,180,1):
@@ -263,42 +269,45 @@ for iEQ in range(1,No_of_GMs+1):
             Rot_Matrix [1,0] = np.sin(np.deg2rad(theta))
             Rot_Matrix [1,1] = np.cos(np.deg2rad(theta))
             Rot_Disp[theta,0] = np.max(np.matmul(DISP_X_Y,Rot_Matrix)[:,0])
-            
+        
+        # Storing Spectra
         Rot_Acc = np.dot(Rot_Disp,(omega**2)/g)
         GM_SPECTRA.loc[ii-1,'RotD50Sa(g)'] = np.median(Rot_Acc)
         GM_SPECTRA.loc[ii-1,'RotD100Sa(g)']= np.max(Rot_Acc)
         wipe()
-                
+
+    # Writing Spectra to Files                
     if not os.path.exists('Spectra'):
-        os.makedirs('Spectra')
-            
+        os.makedirs('Spectra')            
     GM_SPECTRA.to_csv('Spectra//GM'+str(iEQ)+'_Spectra.txt', sep=' ',header=True,index=False)
         
+    # Plotting Spectra
     if Plot_Spectra == 'Yes':
+        
         fig = plt.figure(1,figsize=(18,12))
         axes = fig.add_subplot(1, 1, 1)
-        axes.plot(GM_SPECTRA['Period (sec)'] , GM_SPECTRA['RotD50 Sa (g)'] , '.-',lw=3,markersize=15) 
+        axes.plot(GM_SPECTRA['Period(s)'] , GM_SPECTRA['RotD50Sa(g)'] , '.-',lw=3,markersize=15) 
         axes.set_xlabel('Period (sec)',fontsize=30,fontweight='bold')
         axes.set_ylabel('RotD50 Sa (g)',fontsize=30,fontweight='bold')
         axes.set_title('RotD50 Spectra',fontsize=40,fontweight='bold')
         axes.tick_params(labelsize= 25)
         axes.grid(True)
-        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period (sec)'])))
-        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD50 Sa (g)'])))
+        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period(s)'])))
+        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD50Sa(g)'])))
         axes.axhline(linewidth=10,color='black')        
         axes.axvline(linewidth=10,color='black')
         axes.hold(True)
         
         fig = plt.figure(2,figsize=(18,12))
         axes = fig.add_subplot(1, 1, 1)
-        axes.plot(GM_SPECTRA['Period (sec)'] , GM_SPECTRA['RotD100 Sa (g)'] , '.-',lw=3,markersize=15) 
+        axes.plot(GM_SPECTRA['Period(s)'] , GM_SPECTRA['RotD100Sa(g)'] , '.-',lw=3,markersize=15) 
         axes.set_xlabel('Period (sec)',fontsize=30,fontweight='bold')
         axes.set_ylabel('RotD100 Sa (g)',fontsize=30,fontweight='bold')
         axes.set_title('RotD100 Spectra',fontsize=40,fontweight='bold')
         axes.tick_params(labelsize= 25)
         axes.grid(True)
-        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period (sec)'])))
-        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD100 Sa (g)'])))
+        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period(s)'])))
+        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD100Sa(g)'])))
         axes.axhline(linewidth=10,color='black')        
         axes.axvline(linewidth=10,color='black')
         axes.hold(True)
@@ -306,4 +315,4 @@ for iEQ in range(1,No_of_GMs+1):
     SDOF_RESPONSE.insert(iEQ-1,DISPLACEMENTS)
     GM_RESPONSE.insert(iEQ-1,GM_SPECTRA)
     
-    
+    print('\nGenerated Spectra for GM: {}\n\n\n'.format(np.round(iEQ,0)))
