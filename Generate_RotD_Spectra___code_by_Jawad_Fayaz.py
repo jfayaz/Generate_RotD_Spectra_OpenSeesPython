@@ -313,4 +313,4 @@ for iEQ in range(1,No_of_GMs+1):
     SDOF_RESPONSE.insert(iEQ-1,DISPLACEMENTS)
     GM_RESPONSE.insert(iEQ-1,GM_SPECTRA)
     
-    print('\nGenerated Spectra for GM: {}\n\n\n'.format(np.round(iEQ,0)))
+    print('\nGenerated Spectra for GM: {}\n\n'.format(np.round(iEQ,0)))
