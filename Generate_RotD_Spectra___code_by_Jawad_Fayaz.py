@@ -82,7 +82,7 @@ Int_T_Reg_3       = 0.5
 End_T_Reg_3       = 5
 
 # Plot Spectra  (options: 'Yes' or 'No')
-Plot_Spectra = 'Yes'
+Plot_Spectra      = 'Yes'
 
 
 ##### ============ END OF USER INPUTS  ============ #####
@@ -99,6 +99,9 @@ from opensees import *
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
+import matplotlib.cbook
+warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 wipe()
 
 # Getting Number of Ground Motions from the GM folder
@@ -114,8 +117,7 @@ GM_RESPONSE = [[]]
 
 # Spectra Generation
 for iEQ in range(1,No_of_GMs+1):
-    print('Generating Spectra for GM: {} ...\n'.format(np.round(iEQ,0)))
-    
+    print('Generating Spectra for GM: {} ...\n'.format(np.round(iEQ,0)))   
     Periods = np.concatenate((list(np.arange(Int_T_Reg_1,End_T_Reg_1+Int_T_Reg_1,Int_T_Reg_1)),list(np.arange(End_T_Reg_1+Int_T_Reg_2,End_T_Reg_2+Int_T_Reg_2,Int_T_Reg_2)),list(np.arange(End_T_Reg_2+Int_T_Reg_3,End_T_Reg_3+Int_T_Reg_3,Int_T_Reg_3))),axis=0)
     ii = 0
     
@@ -129,21 +131,21 @@ for iEQ in range(1,No_of_GMs+1):
         # Setting modelbuilder
         model('basic', '-ndm', 3, '-ndf', 6)
         
-        # Setting Variables
-        g = 386.1
-        L = 1.0
-        d = 2
-        r = d/2
-        A = np.pi*(r**2)
-        E = 1.0
-        I3 = np.pi*(r**4)/4
-        G = 1.0
-        J = np.pi*(r**4)/2
-        I2 = np.pi*(r**4)/4
-        K = 3*E*I3/(L**3)
-        M = K*(T**2)/4/(np.pi**2)
-        omega = np.sqrt(K/M)
-        Tn = 2*np.pi/omega
+        # Setting SODF Variables        
+        g = 386.1                   # value of g
+        L = 1.0                     # Length 
+        d = 2                       # Diameter
+        r = d/2                     # Radius
+        A = np.pi*(r**2)            # Area
+        E = 1.0                     # Elastic Modulus
+        G = 1.0                     # Shear Modulus
+        I3 = np.pi*(r**4)/4         # Moment of Inertia (zz)                
+        J = np.pi*(r**4)/2          # Polar Moment of Inertia
+        I2 = np.pi*(r**4)/4         # Moment of Inertia (yy)
+        K = 3*E*I3/(L**3)           # Stiffness 
+        M = K*(T**2)/4/(np.pi**2)   # Mass
+        omega = np.sqrt(K/M)        # Natural Frequency
+        Tn = 2*np.pi/omega          # Natural Period
                 
         # Creating nodes
         node(1, 0.0, 0.0, 0.0)
@@ -171,7 +173,6 @@ for iEQ in range(1,No_of_GMs+1):
         omega = np.sqrt(eigenValues)
         T = 2*np.pi/omega
         print('   Calculating Spectral Ordinate for Period = {} secs'.format(np.round(T,3)))
-        
     
         ## Reading GM Files 
         exec(open("ReadGMFile.py").read())	            # read in procedure Multinition 
@@ -213,7 +214,7 @@ for iEQ in range(1,No_of_GMs+1):
                 
         # Creating the analysis
         wipeAnalysis()			            # clear previously-define analysis parameters
-        constraints("Penalty",1e18, 1e18)   # how it handles boundary conditions
+        constraints("Penalty",1e18, 1e18)   # how to handle boundary conditions
         numberer("RCM")                     # renumber dof's to minimize band-width (optimization), if you want to
         system('SparseGeneral')             # how to store and solve the system of equations in the analysis
         algorithm('Linear')	                # use Linear algorithm for linear analysis
@@ -231,9 +232,8 @@ for iEQ in range(1,No_of_GMs+1):
         time          = [tCurrent]
         u1            = [0.0]
         u2            = [0.0]
-        
-         
-        # Performing the transient analysis
+                
+        # Performing the transient analysis (Performance is slow in this loop)
         while ok == 0 and tCurrent < tFinal:
             ok = analyze(1, dtAnalysis)
             # if the analysis fails try initial tangent iteration
@@ -258,7 +258,7 @@ for iEQ in range(1,No_of_GMs+1):
         DISPLACEMENTS.loc[ii-1,'uY'] = np.array(u2)
         DISP_X_Y = np.column_stack((np.array(u1),np.array(u2)))
         
-        # Rotating the Spectra
+        # Rotating the Spectra (Projections)
         Rot_Matrix = np.zeros((2,2))
         Rot_Disp = np.zeros((180,1))
         for theta in range (0,180,1):
@@ -282,33 +282,28 @@ for iEQ in range(1,No_of_GMs+1):
     # Plotting Spectra
     if Plot_Spectra == 'Yes':
         
-        fig = plt.figure(1,figsize=(18,12))
-        axes = fig.add_subplot(1, 1, 1)
-        axes.plot(GM_SPECTRA['Period(s)'] , GM_SPECTRA['RotD50Sa(g)'] , '.-',lw=3,markersize=15) 
-        axes.set_xlabel('Period (sec)',fontsize=30,fontweight='bold')
-        axes.set_ylabel('RotD50 Sa (g)',fontsize=30,fontweight='bold')
-        axes.set_title('RotD50 Spectra',fontsize=40,fontweight='bold')
-        axes.tick_params(labelsize= 25)
-        axes.grid(True)
-        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period(s)'])))
-        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD50Sa(g)'])))
-        axes.axhline(linewidth=10,color='black')        
-        axes.axvline(linewidth=10,color='black')
-        axes.hold(True)
+        def plot_spectra(PlotTitle,SpectraType,iGM):
+            axes = fig.add_subplot(1, 1, 1)
+            axes.plot(GM_SPECTRA['Period(s)'] , GM_SPECTRA[SpectraType] , '.-',lw=7,markersize=20, label='GM'+str(iGM)) 
+            axes.set_xlabel('Period (sec)',fontsize=30,fontweight='bold')
+            axes.set_ylabel(SpectraType,fontsize=30,fontweight='bold')
+            axes.set_title(PlotTitle,fontsize=40,fontweight='bold')
+            axes.tick_params(labelsize= 25)
+            axes.grid(True)
+            axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period(s)'])))
+            axes.set_ylim(0, np.ceil(max(GM_SPECTRA[SpectraType])))
+            axes.axhline(linewidth=10,color='black')        
+            axes.axvline(linewidth=10,color='black')
+            axes.hold(True)
+            axes.legend(fontsize =30)
+
         
+        fig = plt.figure(1,figsize=(18,12))
+        plot_spectra('RotD50 Spectra','RotD50Sa(g)',iEQ)
+       
         fig = plt.figure(2,figsize=(18,12))
-        axes = fig.add_subplot(1, 1, 1)
-        axes.plot(GM_SPECTRA['Period(s)'] , GM_SPECTRA['RotD100Sa(g)'] , '.-',lw=3,markersize=15) 
-        axes.set_xlabel('Period (sec)',fontsize=30,fontweight='bold')
-        axes.set_ylabel('RotD100 Sa (g)',fontsize=30,fontweight='bold')
-        axes.set_title('RotD100 Spectra',fontsize=40,fontweight='bold')
-        axes.tick_params(labelsize= 25)
-        axes.grid(True)
-        axes.set_xlim(0, np.ceil(max(GM_SPECTRA['Period(s)'])))
-        axes.set_ylim(0, np.ceil(max(GM_SPECTRA['RotD100Sa(g)'])))
-        axes.axhline(linewidth=10,color='black')        
-        axes.axvline(linewidth=10,color='black')
-        axes.hold(True)
+        plot_spectra('RotD100 Spectra','RotD100Sa(g)',iEQ)
+
 
     SDOF_RESPONSE.insert(iEQ-1,DISPLACEMENTS)
     GM_RESPONSE.insert(iEQ-1,GM_SPECTRA)
