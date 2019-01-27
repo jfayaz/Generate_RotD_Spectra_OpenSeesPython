@@ -1,5 +1,6 @@
 """
 author : JAWAD FAYAZ (email: jfayaz@uci.edu)
+visit: (https://jfayaz.github.io)
 
 ------------------------------ Instructions ------------------------------------- 
 This code develops the RotD50 Sa and RotD100 Sa Spectra of the Bi-Directional 
